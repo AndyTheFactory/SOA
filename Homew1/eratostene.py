@@ -13,28 +13,33 @@ def main():
     for i in range(0,NR_AGENTS):
         agents.append(Agent(random.randint(1, int(math.sqrt(MAX_NUMBER)-1))))
 
+    print_sieve()
+
     while not isReady():
-        print_sieve()
+        #print("Start iteration")
         for ag in agents:
             ag.tick()
+            print_sieve()
+            #input("press enter")
     print_primes()
 
 def isReady():
     return np.prod(sieve_trace)>0
 
 def check_agent(n):
-    res=False
+    res=None
     for ag in agents:
         if ag.current_nr==n:
-            res=True
+            res=ag
             break
     return res
 
 def print_sieve():
     s="1"
     for ix,nr in enumerate(sieve):
-        if check_agent(ix):
-            s+="A"
+        a= check_agent(ix)
+        if a !=None:
+            s+="A(%d)"%a.increment
         else:
             if (nr>0):
                 s+="*"
@@ -68,6 +73,7 @@ class Agent:
     def stepin(self):
         sieve[self.current_nr] = 0
         sieve_trace[self.current_nr]=1
+        #print("Moving A(%d)"%self.increment)
 
     def tick(self):
         #  Make move
