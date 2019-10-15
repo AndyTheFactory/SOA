@@ -119,6 +119,10 @@ class Boid:
             self.velocity[1]=-self.velocity[1]
             self.velocity[0]=0
             self.position += self.velocity
+        if self.in_obstacle(self.position):
+            self.position -= self.velocity
+            self.velocity=-self.velocity
+            self.position += self.velocity
 
 
     def distance(self,position):
