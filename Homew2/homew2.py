@@ -1,116 +1,205 @@
 import random
+import sys
+
 import arcade
 import numpy as np
 import os
-
+import time
 
 # --- Constants ---
-SPRITE_SCALING_PLAYER = 0.3
+SPRITE_SCALING_PLAYER = 0.24
 
-BOID_COUNT = 7
+BOID_COUNT = 60
 
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 500
+SCREEN_HEIGHT = 500
 SCREEN_TITLE = "Reynolds Boids"
 
 BOID_CONFIG={
-    "radius":10,
-    "base":7,
+    "radius":3,
+    "base":4,
     "color": arcade.color.RED,
-    "color2": arcade.color.BLUE,
-    "maxacceleration":20,
-    "velocity":10,
+    "maxacceleration":10,
+    "velocity":5,
     "maxvelocity":20,
-    "perception":100,
+    "perception":500,
+    "dangerradius":30,
+    "obstacleradius":20,
+    "obstaclecolor": arcade.color.BABY_BLUE,
 }
 class Boid:
-    position=np.zeros(2)
-    velocity=np.zeros(2)
+    position=np.zeros(2).astype(int)
+    velocity=np.zeros(2).astype(int)
+    acceleration=np.zeros(2)
 
     def __init__(self,game):
         self.game=game
         while True:
-            self.x=random.randint(0+BOID_CONFIG["radius"],SCREEN_WIDTH-0+BOID_CONFIG["radius"])
-            self.y=random.randint(0+BOID_CONFIG["radius"],SCREEN_WIDTH-0+BOID_CONFIG["radius"])
-            if self.verifyPosition(self.x,self.y):
+            self.position=np.array(
+                        (random.randint(0+BOID_CONFIG["radius"],SCREEN_WIDTH-0+BOID_CONFIG["radius"]),
+                                        random.randint(0+BOID_CONFIG["radius"],SCREEN_WIDTH-0+BOID_CONFIG["radius"]))
+                         )
+            if self.verifyPosition(self.position):
                 break
-        self.velocity=BOID_CONFIG["velocity"]
-        self.acceleration=BOID_CONFIG["acceleration"]
-        self.orientation=random.randint(0,360) #degrees
+        v=random.randint(1,BOID_CONFIG["maxvelocity"])
+        orientation=random.random()*2*np.pi
+
+        self.velocity=np.array( (
+                        int(v*np.cos(orientation)),
+                        int(v*np.sin(orientation))
+        ) ) #norm=v, angle=orientation
+
+
     def x(self):
         return self.position[0]
     def y(self):
         return self.position[1]
+
     def velocity_val(self):
         return np.linalg.norm(self.velocity)
+
+    def normalize_speed(self,speed):
+        n=np.linalg.norm(speed)
+        if n>BOID_CONFIG["maxvelocity"]:
+            speed = (speed / n) * BOID_CONFIG["maxvelocity"]
+        return np.around(speed).astype(int)
+
+    def normalize_acceleration(self,acc):
+        n=np.linalg.norm(acc)
+        if n>BOID_CONFIG["maxacceleration"]:
+            acc = (acc / n) * BOID_CONFIG["maxacceleration"]
+        return acc
+
     def draw(self):
-        rad=self.orientation*(np.pi/180)
+
+        rad=np.arctan(self.velocity[1]/(self.velocity[0]+sys.float_info.epsilon)) - \
+                (1 - np.sign(self.velocity[0])) * np.sign(self.velocity[0]) * np.pi / 2
+
+
+        # rad=np.arctan(self.y()/(self.x()+sys.float_info.epsilon))
         theta=np.arccos(1-BOID_CONFIG["base"]**2/(2*BOID_CONFIG["radius"]**2))
 
-        x1,y1=(self.x+BOID_CONFIG["radius"]*np.cos(rad),self.y+BOID_CONFIG["radius"]*np.sin(rad))
+        x1,y1=(self.x()+BOID_CONFIG["radius"]*np.cos(rad),self.y()+BOID_CONFIG["radius"]*np.sin(rad))
         u1=rad-np.pi+theta/2
         u2=rad+np.pi-theta/2
-        x2,y2=(self.x+BOID_CONFIG["radius"]*np.cos(u1),self.y+BOID_CONFIG["radius"]*np.sin(u1))
-        x3,y3=(self.x+BOID_CONFIG["radius"]*np.cos(u2),self.y+BOID_CONFIG["radius"]*np.sin(u2))
+        x2,y2=(self.x()+BOID_CONFIG["radius"]*np.cos(u1),self.y()+BOID_CONFIG["radius"]*np.sin(u1))
+        x3,y3=(self.x()+BOID_CONFIG["radius"]*np.cos(u2),self.y()+BOID_CONFIG["radius"]*np.sin(u2))
 
         self.shape=arcade.create_triangles_filled_with_colors([(x1,y1),(x2,y2),(x3,y3)],[BOID_CONFIG["color"],BOID_CONFIG["color"],BOID_CONFIG["color"]])
         #arcade.draw_triangle_filled(x1,y1,x2+(x1-x2)*2/3,y2+(y1-y2)*2/3,x3+(x1-x3)*2/3,y3+(x1-y3)*2/3,BOID_CONFIG["color2"])
 
-    def verifyPosition(self,x,y):
+    def verifyPosition(self,position):
         for b in self.game.boids_list:
             if b==self:
                 continue
             else:
-                d=np.sqrt((b.x-x)**2+(b.y-y)**2)
+                d=np.linalg.norm(b.position-position)
                 if d<=BOID_CONFIG["radius"]:
                     return False
         return True
     def move(self):
-        rad = self.orientation * (np.pi / 180)
-        newx,newy=self.x+BOID_CONFIG["velocity"]*np.cos(rad),self.y+BOID_CONFIG["velocity"]*np.sin(rad)
+        self.acceleration+=self.align()
+        self.acceleration+=self.cohesion()
+        self.acceleration+=self.separation()
+        self.acceleration+=self.checkdanger()
 
-        self.x,self.y=newx,newy
-    def distance(self,x,y):
-        return np.linalg.norm((self.x,self.y)-(x,y))
+        self.acceleration=self.normalize_acceleration(self.acceleration)
+
+        self.velocity+=np.around(self.acceleration).astype(int)
+        self.velocity=self.normalize_speed(self.velocity)
+        self.position+=self.velocity
+
+        if self.position[0]<0 or self.position[0]>SCREEN_WIDTH:
+            self.position -= self.velocity
+            self.velocity[0]=-self.velocity[0]
+            self.velocity[1]=0
+            self.position += self.velocity
+        if self.position[1]<0 or self.position[1]>SCREEN_HEIGHT:
+            self.position -= self.velocity
+            self.velocity[1]=-self.velocity[1]
+            self.velocity[0]=0
+            self.position += self.velocity
+
+
+    def distance(self,position):
+        return np.linalg.norm(self.position-position)
 
     def visible_boids(self):
         res=[]
         for b in self.game.boids_list:
-            if b!=self and self.distance(b.x,b.y)<=BOID_CONFIG["perception"]:
+            if b!=self and self.distance(b.position)<=BOID_CONFIG["perception"]:
                 res.append(b)
         return res
-    def velocity_vector(self):
-        rad = self.orientation * (np.pi / 180)
-        res=np.ndarray(self.velocity*np.cos(rad),self.velocity*np.sin(rad))
-        return res
+
     def align(self):
         steering=np.zeros(2)
         boids=self.visible_boids()
         avg=np.zeros(2)
         for b in boids:
-            avg+=b.velocity_vector()
+            avg+=b.velocity
         if len(boids)>0:
             avg /= len(boids)
-            avg = (avg/np.linalg.norm(avg))*BOID_CONFIG["maxvelocity"]
-            steering=avg-self.velocity_vector()
+            steering=avg-self.velocity
+            steering = self.normalize_acceleration(steering)
         return steering
+
     def cohesion(self):
         steering=np.zeros(2)
         boids=self.visible_boids()
         center=np.zeros(2)
         for b in boids:
-            center+=np.ndarray(self.x,self.y)
+            center+=b.position
         if len(boids)>0:
             center/=len(boids)
-            vect_to_center=center-np.ndarray((self.x,self.y))
-            d=np.linalg.norm(vect_to_center)
-            if d>0:
-                vect_to_center=(vect_to_center/d)*self.velocity
-            steering=vect_to_center-self.velocity_vector()
-            if np.linalg.norm(steering)>self.acceleration:
-                steering=(steering/np.linalg.norm(steering))*self.acceleration
-            return steering
+            vect_to_center=center-np.array(self.position)
 
+            d=np.linalg.norm(vect_to_center)
+
+            steering=vect_to_center-self.velocity
+            steering = self.normalize_acceleration(steering)
+        return steering
+
+    def separation(self):
+        steering=np.zeros(2)
+        boids=self.visible_boids()
+        avg=np.zeros(2)
+        for b in boids:
+            diff = self.position - b.position
+            #diff = diff / int(self.distance(b.position))
+            avg+=diff
+        if len(boids)>0:
+            avg/=len(boids)
+            steering = avg - self.velocity
+            steering = self.normalize_acceleration(steering)
+        return steering
+
+    def in_obstacle(self,position):
+        for o in self.game.obstacles_list:
+            if np.linalg.norm(o-position)<=BOID_CONFIG["obstacleradius"]:
+                return True
+        return False
+
+    def checkdanger(self):
+        steering=np.zeros(2)
+        if np.linalg.norm(self.velocity)>0:
+            v_norm=self.velocity / np.linalg.norm(self.velocity)
+        else:
+            v_norm = self.velocity
+        checkpos=self.position+self.velocity+v_norm *BOID_CONFIG["perception"]
+        checkpos_danger=self.position+self.velocity+v_norm *BOID_CONFIG["dangerradius"]
+
+        if checkpos[0]<0 or checkpos[0]>SCREEN_WIDTH or (self.in_obstacle(checkpos) and self.velocity[0]>self.velocity[1]):
+            steering+=np.array((-v_norm[1],v_norm[0]))*BOID_CONFIG["maxacceleration"]
+        if checkpos[1] < 0 or checkpos[1] > SCREEN_HEIGHT:
+            steering+=np.array((v_norm[1],-v_norm[0]))*BOID_CONFIG["maxacceleration"]
+
+        if checkpos_danger[0]<0 or checkpos_danger[0]>SCREEN_WIDTH or (self.in_obstacle(checkpos) and self.velocity[0]<=self.velocity[1]):
+            steering+=np.array((-v_norm[1],0))*BOID_CONFIG["maxacceleration"]
+        if checkpos_danger[1] < 0 or checkpos_danger[1] > SCREEN_HEIGHT :
+            steering+=np.array((0,-v_norm[0]))*BOID_CONFIG["maxacceleration"]
+
+
+        return steering
 
 class MyGame(arcade.Window):
     """ Our custom Window Class"""
@@ -147,6 +236,7 @@ class MyGame(arcade.Window):
         self.player_list = arcade.SpriteList()
         self.shape_list = arcade.ShapeElementList()
         self.boids_list=[]
+        self.obstacles_list=[]
         # Score
         self.score = 0
 
@@ -156,6 +246,7 @@ class MyGame(arcade.Window):
         self.player_sprite.center_x = 50
         self.player_sprite.center_y = 50
         self.player_list.append(self.player_sprite)
+
 
         # Create the boids
         for i in range(BOID_COUNT):
@@ -173,12 +264,24 @@ class MyGame(arcade.Window):
         output = f"Boids: {len(self.boids_list)}"
         arcade.draw_text(output, 10, 20, arcade.color.WHITE, 14)
         self.shape_list.draw()
+        for ob in self.obstacles_list:
+            arcade.draw_circle_filled(ob[0],ob[1],BOID_CONFIG["obstacleradius"],BOID_CONFIG["obstaclecolor"])
+
     def on_mouse_motion(self, x, y, dx, dy):
         """ Handle Mouse Motion """
 
         # Move the center of the player sprite to match the mouse x, y
         self.player_sprite.center_x = x
         self.player_sprite.center_y = y
+
+    def on_mouse_press(self, x, y, button, modifiers):
+        p=np.array((x,y))
+        for o in self.obstacles_list:
+            if np.linalg.norm(o-p)<=BOID_CONFIG["obstacleradius"]:
+                self.obstacles_list.remove(o)
+                return
+
+        self.obstacles_list.append(p)
 
     def update(self, delta_time):
         """ Movement and game logic """
