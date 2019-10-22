@@ -1,10 +1,12 @@
 import numpy as np
 import random
 import sys
-import tqdm
+from  tqdm import tqdm
+from progressbar import ProgressBar
 
 global G1, G2, G3
 
+IN_IPYNB = False
 
 def init_array(size):
     A = np.random.randint(low=1, high=100, size=(size, size))
@@ -117,6 +119,7 @@ class AntColony:
                 pos = random.randint(0, self.nr_nodes - 1)  # Nodes are 1..N , Graph is 0..N-1
                 if not self.checkPosition(pos):
                     break
+            ant.tabu = list()
             ant.position = pos
             ant.tabu.append(pos)
             ant.all_nodes = set(range(0, self.nr_nodes))
@@ -143,7 +146,16 @@ class AntColony:
             if prev == None:
                 prev = ant
                 continue
-            if prev.L != ant.L or not np.array_equal(np.array(prev.tabu), np.array(ant.tabu)):
+            if prev.L != ant.L :
+                return False
+            t=np.array(ant.tabu)
+            e=False
+            for n in range(0, self.nr_nodes):
+                if np.array_equal(np.array(prev.tabu), t):
+                    e=True
+                    break
+                t=np.roll(t,1)
+            if not e:
                 return False
             prev = ant
         return True
@@ -161,15 +173,23 @@ class AntColony:
 
     def reset_ants(self):
         for ant in self.ants:
-            ant.position = ant.tabu[0]
-            ant.tabu = [ant.position]
+            if len(ant.tabu) > 0 :
+                ant.position = ant.tabu[0]
+                ant.tabu = [ant.position]
+            else:
+                ant.position = -1
+                ant.tabu = list()
             ant.L = 0
 
     def run(self):
         n_iteration = 0
         best_way = list()
         best_cost = sys.maxsize
-        pbar = tqdm.tqdm(total=self.N_MAX)
+
+        if IN_IPYNB:
+            pbar = ProgressBar(maxval=self.N_MAX)
+        else:
+            pbar = tqdm(total=self.N_MAX)
 
         while True:
             self.move_all_ants()
@@ -205,6 +225,7 @@ class AntColony:
 
 if __name__ == "__main__":
     G1 = init_array(9)
+    G2 = init_array(10)
     # G1 = np.array([[0, 43, 18, 34, 67, 41, 32, 1, 84],
     #                [43, 0, 93, 51, 1, 86, 44, 92, 27],
     #                [18, 93, 0, 49, 33, 87, 36, 22, 2],
@@ -216,18 +237,35 @@ if __name__ == "__main__":
     #                [84, 27, 2, 28, 57, 5, 10, 44, 0]])
 
     print(TSP(G1))
-    G1 = np.array([[ 0, 92, 30,  0, 25, 83, 26, 62, 36],
-       [92,  0, 44, 76, 65, 81, 95, 24, 28],
-       [30, 44,  0, 85, 54, 74, 49, 37, 70],
-       [ 0, 76, 85,  0, 25,  0, 63, 40,  8],
-       [25, 65, 54, 25,  0, 90, 77, 79, 94],
-       [83, 81, 74,  0, 90,  0, 87, 57, 48],
-       [26, 95, 49, 63, 77, 87,  0, 13, 69],
-       [62, 24, 37, 40, 79, 57, 13,  0, 48],
-       [36, 28, 70,  8, 94, 48, 69, 48,  0]])
+    G1 = np.array([
+       [ 0, 75, 64, 98, 29, 43, 15, 75, 64],
+       [75,  0, 22, 35, 50, 50, 34, 11,  8],
+       [64, 22,  0, 50, 92, 79, 35, 31, 97],
+       [98, 35, 50,  0, 71, 65,  1,  5, 73],
+       [29, 50, 92, 71,  0, 56, 58, 44,  3],
+       [43, 50, 79, 65, 56,  0, 39, 56, 19],
+       [15, 34, 35,  1, 58, 39,  0, 23,  3],
+       [75, 11, 31,  5, 44, 56, 23,  0, 16],
+       [64,  8, 97, 73,  3, 19,  3, 16,  0]])
+    G2=np.array([
+       [ 0, 93,  1, 77, 81, 41, 16, 51, 45, 79],
+       [93,  0, 52, 73, 23, 19, 12, 79, 23, 17],
+       [ 1, 52,  0, 99, 21, 37, 87, 19,  2, 60],
+       [77, 73, 99,  0, 65, 34, 57, 78, 65, 82],
+       [81, 23, 21, 65,  0, 55, 94, 74,  3, 83],
+       [41, 19, 37, 34, 55,  0, 40, 17, 29, 39],
+       [16, 12, 87, 57, 94, 40,  0, 65, 76, 78],
+       [51, 79, 19, 78, 74, 17, 65,  0, 93, 41],
+       [45, 23,  2, 65,  3, 29, 76, 93,  0, 88],
+       [79, 17, 60, 82, 83, 39, 78, 41, 88,  0]])
 
     ac = AntColony(0.5, 1, 0.3)
     ac.loadGraph(G1)
     print("AC Result: ")
+    way, cost = ac.run()
+    print(way, cost)
+
+    ac = AntColony(0.5, 1, 0.3)
+    ac.loadGraph(G2)
     way, cost = ac.run()
     print(way, cost)
