@@ -206,11 +206,17 @@ class PSO():
         return best_position, best_value
 
 # --- RUN ----------------------------------------------------------------------+
+#
+#  it can be seen that the range r0.9. 1.21 is a good area to choose w from. (Shi and Eberhard 1998)
+#
+#  constriction factor --> 2 / |2 - fi**2 -sqrt(fi** - 4*fi), where fi= fi1+fi2
+#
 
-best_pos, best_val = PSO(
-    topology_type='4neighbours', costFunc=func_griewank, nr_dimensions=2,
-    fi1=1, fi2=2, w=0.4, bounds_down=[-10,-10], bounds_up=[10,10]
-).run()
-
-print(best_pos)
-print(best_val)
+# if __name__ == "__main__":
+#     best_pos, best_val = PSO(
+#         topology_type='4neighbours', costFunc=func_griewank, nr_dimensions=2,
+#         fi1=1, fi2=2, w=0.4, constriction=None, bounds_down=[-10,-10], bounds_up=[10,10]
+#     ).run()
+#
+#     print(best_pos)
+#     print(best_val)
