@@ -179,10 +179,19 @@ class PSO():
             self.swarm.append(Particle(costFunc, nr_dimensions,  fi1, fi2, w, constriction, bounds_down, bounds_up))
 
         self.topology = Topology(topology_type, self.swarm)
+    def get_best(self):
+        best_value = sys.float_info.max
+        best_position = None
+        for particle in self.swarm:
+            if particle.value_best < best_value:
+                best_value = particle.value_best
+                best_position = particle.pos_best
+        return best_position, best_value
 
     def run(self):
         # begin optimization loop
         i = 0
+        hist=list([])
         while i < MAX_ITERATIONS:
 
             for particle in self.swarm:
@@ -195,15 +204,10 @@ class PSO():
                 particle.update_position()
 
             i += 1
-
-        best_value = sys.float_info.max
-        best_position = None
-        for particle in self.swarm:
-            if particle.value_best < best_value:
-                best_value = particle.value_best
-                best_position = particle.pos_best
-
-        return best_position, best_value
+            # _, b =self.get_best()
+            # hist.append(b)
+        best_position, best_value = self.get_best()
+        return best_position, best_value, hist
 
 # --- RUN ----------------------------------------------------------------------+
 #
@@ -220,3 +224,23 @@ class PSO():
 #
 #     print(best_pos)
 #     print(best_val)
+
+
+# if __name__ == "__main__":
+#     best_pos, best_val = PSO(
+#         topology_type='full', costFunc=func_spehre, nr_dimensions=2,
+#         fi1=2.2, fi2=2.2, w=0.8, constriction=None, bounds_down=[-50,-50], bounds_up=[50,50]
+#     ).run()
+#
+#     print(best_pos)
+#     print(best_val)
+
+if __name__ == "__main__":
+    best_pos, best_val, hist = PSO(
+        topology_type='full', costFunc=func_spehre, nr_dimensions=2,
+        fi1=2.2, fi2=2.2, w=1.2, constriction=None, bounds_down=[-50,-50], bounds_up=[50,50]
+    ).run()
+
+    print(best_pos)
+    print(best_val)
+   #print(hist)

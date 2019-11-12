@@ -9,15 +9,15 @@ import time
 # --- Constants ---
 SPRITE_SCALING_PLAYER = 0.24
 
-BOID_COUNT = 60
+BOID_COUNT = 30
 
 SCREEN_WIDTH = 500
 SCREEN_HEIGHT = 500
 SCREEN_TITLE = "Reynolds Boids"
 
 BOID_CONFIG={
-    "radius":3,
-    "base":4,
+    "radius":10,
+    "base":7,
     "color": arcade.color.RED,
     "maxacceleration":10,
     "velocity":5,
@@ -128,6 +128,12 @@ class Boid:
     def distance(self,position):
         return np.linalg.norm(self.position-position)
 
+    def in_obstacle(self,position):
+        for o in self.game.obstacles_list:
+            if np.linalg.norm(o-position)<=BOID_CONFIG["obstacleradius"]:
+                return True
+        return False
+
     def visible_boids(self):
         res=[]
         for b in self.game.boids_list:
@@ -176,12 +182,6 @@ class Boid:
             steering = avg - self.velocity
             steering = self.normalize_acceleration(steering)
         return steering
-
-    def in_obstacle(self,position):
-        for o in self.game.obstacles_list:
-            if np.linalg.norm(o-position)<=BOID_CONFIG["obstacleradius"]:
-                return True
-        return False
 
     def checkdanger(self):
         steering=np.zeros(2)
