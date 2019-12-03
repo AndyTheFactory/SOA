@@ -4,6 +4,8 @@ from copy import deepcopy
 
 import numpy as np
 import math
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
 
 # --- COST FUNCTIONS ------------------------------------------------------------+
@@ -43,8 +45,8 @@ def func_griewank(x):
     return 1 + total / 4000 - mult
 
 
-NR_CATS = 100
-SMP = 50  # seeking memory pool
+NR_CATS = 20
+SMP = 20  # seeking memory pool
 SRD = 0.15  # seeking range of the selected dimension
 CDC = 2  # counts of dimensions to change
 SPC = True  # Self-Position Consideration
@@ -78,16 +80,14 @@ class Cat:
         scouts = list([])
         fitness = np.zeros(SMP)
 
-        FS_max = -sys.float_info.max
-        FS_min = sys.float_info.max
         for j in range(SMP):
             if j == SMP - 1 and SPC:
                 scouts.append(deepcopy(self))
             else:
                 scouts.append(
-                    Cat(self.position, self._random_velocity(), self.costFunc, self.mode)
+                    Cat(self._random_position(), self.velocity, self.costFunc, self.mode)
                 )
-            scouts[-1].position += scouts[-1].velocity
+            # scouts[-1].position += scouts[-1].velocity
             fitness[j] = scouts[-1].fitness()
 
 
@@ -135,6 +135,13 @@ class Cat:
 
         return v_new
 
+    def _random_position(self):
+        pos_new = deepcopy(self.position)
+        dim_changed = random.sample(range(0, self.position.shape[0]), CDC)
+        for d in dim_changed:
+            pos_new[d] = pos_new[d] * (1 + SRD * random.uniform(-1, 1))  # v_new  between [v - SRD * v, v + SRD * v]
+
+        return pos_new
 
 class Dispatcher:
     def __init__(self, costFunc, nr_dimensions, bounds_down, bounds_up):
@@ -173,13 +180,17 @@ class Dispatcher:
         return best_cat_pos
 
     def run(self, nr_iterations):
-
+        history = {"positions":[], "step":[], "value":[]}
         for i in range(nr_iterations):
 
-            self.update_best_cat()
+            bc = self.update_best_cat()
+
 
             for cat in self.cats:
                 cat.act()
+                history["positions"].append(cat.position)
+                history["step"].append(i)
+                history["value"].append(self.costFunc(cat.position))
 
             random.shuffle(self.cats)
 
@@ -188,13 +199,28 @@ class Dispatcher:
 
         best_pos = self.update_best_cat()
 
-        return best_pos, self.costFunc(best_pos)
+        return best_pos, self.costFunc(best_pos), history
 
+def plot_history(hist):
+    colors = cm.rainbow(np.linspace(0, 1, 1 + max(hist['step'])))
+
+    c = [colors[x] for x in hist["step"]]
+    x = [x[0] for x in hist["positions"]]
+    y = [x[1] for x in hist["positions"]]
+
+    plt.axhline(0, color='black')
+    plt.axvline(0, color='black')
+    plt.scatter(x,y , c=c)
+    plt.show()
 
 if __name__ == "__main__":
-    print(Dispatcher(costFunc=func_spehre, nr_dimensions=2, bounds_down=-100, bounds_up=100).run(nr_iterations=50))
-    print(Dispatcher(costFunc=func_spehre, nr_dimensions=2, bounds_down=-100, bounds_up=100).run(nr_iterations=100))
-    print(Dispatcher(costFunc=func_spehre, nr_dimensions=2, bounds_down=-100, bounds_up=100).run(nr_iterations=500))
+    best_pos, best_value, hist = Dispatcher(costFunc=func_spehre, nr_dimensions=2, bounds_down=-100, bounds_up=100).run(nr_iterations=50)
+    print("Point  = (%s)" % best_pos)
+    print("Value = %.5f" % best_value)
+
+    # plot_history(hist)
+    # print(Dispatcher(costFunc=func_spehre, nr_dimensions=2, bounds_down=-100, bounds_up=100).run(nr_iterations=100))
+    # print(Dispatcher(costFunc=func_spehre, nr_dimensions=2, bounds_down=-100, bounds_up=100).run(nr_iterations=500))
 
 # def func_spehre(x):
 #     # bounds [-100,100]
