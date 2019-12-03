@@ -43,14 +43,15 @@ def func_griewank(x):
     return 1 + total / 4000 - mult
 
 
-NR_CATS = 50
-SMP = 10  # seeking memory pool
-SRD = 0.7  # seeking range of the selected dimension
+NR_CATS = 100
+SMP = 50  # seeking memory pool
+SRD = 0.15  # seeking range of the selected dimension
 CDC = 2  # counts of dimensions to change
-SPC = False  # Self-Position Consideration
-C1 = 0.5  # Tracing mode constant
+SPC = True  # Self-Position Consideration
+C1 = 0.4  # Tracing mode constant
 MR = 0.2  # mixture ratio
 
+V_MAX = 100
 MAX_ITERATIONS = 50
 
 IS_MINIMIZATION_PROBLEM = True
@@ -81,16 +82,17 @@ class Cat:
         FS_min = sys.float_info.max
         for j in range(SMP):
             if j == SMP - 1 and SPC:
-                scouts.append(self)
+                scouts.append(deepcopy(self))
             else:
                 scouts.append(
                     Cat(self.position, self._random_velocity(), self.costFunc, self.mode)
                 )
+            scouts[-1].position += scouts[-1].velocity
             fitness[j] = scouts[-1].fitness()
-            if FS_max < fitness[j]:
-                FS_max = fitness[j]
-            if FS_min > fitness[j]:
-                FS_min = fitness[j]
+
+
+        FS_max = np.max(fitness)
+        FS_min = np.min(fitness)
 
         if IS_MINIMIZATION_PROBLEM:
             FS_b = FS_max
@@ -112,7 +114,8 @@ class Cat:
         self.velocity = scouts[cat_picked].velocity  # set new position
 
     def tracing(self):
-        V_MAX = (SRD + 1) * self.velocity
+        #V_MAX = (1 + SRD) * self.velocity
+        #V_MIN = (1 - SRD) * self.velocity
 
         r1 = random.random()
         self.velocity = self.velocity + r1 * C1 * (self.best_cat_pos - self.position)
@@ -125,7 +128,7 @@ class Cat:
         return self.costFunc(self.position)
 
     def _random_velocity(self):
-        v_new = self.velocity
+        v_new = deepcopy(self.velocity)
         dim_changed = random.sample(range(0, self.position.shape[0]), CDC)
         for d in dim_changed:
             v_new[d] = v_new[d] * (1 + SRD * random.uniform(-1, 1))  # v_new  between [v - SRD * v, v + SRD * v]
